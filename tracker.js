@@ -10,11 +10,128 @@ function badge(t){let names={urgent:"紧急",soon:"次级提醒",normal:"药品�
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 let toastTimer;
 function toast(s){clearTimeout(toastTimer);$("toast").textContent=s;$("toast").classList.remove("hidden");toastTimer=setTimeout(()=>$("toast").classList.add("hidden"),2200)}
-function row(r,withActions=false){return `<div class="patientRow"><div class="avatar">${esc((r.pt||"档").slice(-1))}</div><div class="patientMain" data-detail="${r.id}"><div class="patientName">${esc(r.pt||"未命名")}</div><div class="patientMeta">${esc(r.hcp||"未填 HCP")} · ${esc(r.dep||"未填科室")} · ${r.rdd===null?"RDD —":`RDD ${r.rdd}天`} · 已记录购药 ${r.cumulative}天</div></div>${badge(r.type)}${withActions?`<button class="secondary" style="padding:8px 9px;font-size:11px" data-purchase="${r.id}">更新购药</button>`:""}</div>`}
-function render(){let a=all(),c={urgent:0,soon:0,normal:0,inactive:0,empty:0};a.forEach(r=>c[r.type]++);$("today").textContent=new Date().toLocaleDateString("zh-CN",{year:"numeric",month:"long",day:"numeric",weekday:"long"});$("focusNum").textContent=c.urgent+c.soon;$("metrics").innerHTML=[["urgent","紧急跟进",c.urgent],["soon","近期提醒",c.soon],["normal","药品充足",c.normal],["inactive","暂不跟进",c.inactive]].map(([t,n,v])=>`<div class="metric"><div class="metricTop"><span class="muted">${n}</span><span class="dot" style="background:${t==="urgent"?"#d94a4a":t==="soon"?"#d79a38":t==="normal"?"#22966b":"#9aa3b1"}"></span></div><div class="metricNum">${v}</div><div class="metricLabel">当前档案状态</div></div>`).join("");$("priorityList").innerHTML=a.filter(r=>r.type==="urgent"||r.type==="soon").slice(0,5).map(r=>row(r)).join("")||'<div class="emptyState">暂时没有待处理事项。新增患者档案后，系统会自动计算提醒。</div>';let recent=a.flatMap(r=>r.purchases.map(p=>({...p,pt:r.pt,id:r.id}))).sort((x,y)=>y.date.localeCompare(x.date)).slice(0,4);$("recentList").innerHTML=recent.map(p=>`<div class="patientRow"><div class="avatar">购</div><div class="patientMain" data-detail="${p.id}"><div class="patientName">${esc(p.pt)}</div><div class="patientMeta">${fmt(p.date)} · 本次 ${p.qty} 天</div></div><span class="muted">›</span></div>`).join("")||'<div class="emptyState">还没有购药记录。新增患者后，点击「更新购药」记录第一次购药。</div>';renderPatients();$("statsList").innerHTML=[["患者档案总数",records.length],["已记录累计购药天数",a.reduce((s,r)=>s+r.cumulative,0)+" 天"],["购药记录总数",a.reduce((s,r)=>s+r.purchases.length,0)],["紧急跟进",c.urgent],["次级提醒",c.soon],["正常",c.normal],["暂不跟进",c.inactive]].map(x=>`<div class="kpi"><span>${x[0]}</span><b>${x[1]}</b></div>`).join("")}
-function renderPatients(){let q=$("query").value.toLowerCase(),f=$("filter").value,a=all().filter(r=>(!q||[r.pt,r.hcp,r.dep].join(" ").toLowerCase().includes(q))&&(f==="all"||r.type===f));$("patientList").innerHTML=a.map(r=>row(r,true)).join("")||'<div class="emptyState">还没有患者档案。点击「新增患者」建立第一条记录。</div>'}
-function tab(t){document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.tab===t));["home","patients","stats","detail"].forEach(s=>$(s).classList.toggle("active",s===t));$("fab").classList.toggle("hidden",t!=="patients")}
-function showDetail(id){currentId=id;const record=records.find(x=>x.id===id);if(!record)return;const r=derive(record);let history=[...r.purchases].sort((a,b)=>b.date.localeCompare(a.date));$("detailContent").innerHTML=`<div class="detailHead"><div class="detailAvatar">${esc((r.pt||"档").slice(-1))}</div><div style="flex:1"><div class="detailName">${esc(r.pt)}</div><div class="muted">${esc(r.hcp||"—")} · ${esc(r.dep||"—")}</div></div>${badge(r.type)}</div><div class="recordActions" style="margin:13px 0"><button data-purchase="${id}">＋ 更新购药</button><button class="secondary" data-edit="${id}">编辑档案</button></div><div class="detailGrid"><div class="detailCell"><div class="k">预计剩余天数 RDD</div><div class="v">${r.rdd === null ? "—" : r.rdd + " 天"}</div></div><div class="detailCell"><div class="k">已记录累计购药天数</div><div class="v">${r.cumulative} 天</div></div><div class="detailCell"><div class="k">最近购药日期 LPD</div><div class="v" style="font-size:15px">${fmt(r.lpd)}</div></div><div class="detailCell"><div class="k">最近购药数量 LPQ</div><div class="v">${r.lpq === "" ? "—" : r.lpq + " 天"}</div></div></div><div class="panel"><div class="panelHead"><div class="panelTitle">档案信息</div></div><div class="kpi"><span>开始日期 STD</span><b>${fmt(r.std)}</b></div><div class="kpi"><span>疗程周数 DOT(w)</span><b>${r.dot||"—"}</b></div><div class="kpi"><span>提醒状态</span><b>${esc(r.alert||"未计算")}</b></div><div class="kpi"><span>备注</span><b>${esc(r.memo||"—")}</b></div></div><div class="panel"><div class="panelHead"><div class="panelTitle">购药历史</div><span class="muted">${history.length} 次记录</span></div>${history.length?`<div class="timeline">${history.map(p=>`<div class="event"><div class="eventDate">${fmt(p.date)}</div><div class="eventText">购药 ${p.qty} 天</div></div>`).join("")}</div>`:'<div class="emptyState">尚无购药记录，可点击「更新购药」添加首次记录</div>'}<p class="note">已记录累计购药天数 = 从开始使用本系统后，逐次记录的所有购药 LPQ 之和。该指标不等同于实际服药天数或依从性。</p></div>`;tab("detail")}
+
+let urgentOnly = false;
+
+function shortDate(date) {
+  return Number(date.slice(5, 7)) + "月" + Number(date.slice(8, 10)) + "日";
+}
+
+function patientStatus(record) {
+  if (record.type === "inactive") return "暂不跟进";
+  if (record.rdd === null) return record.lpd ? "待补购药天数" : "尚无购药记录";
+  if (record.rdd < 0) return "预计已缺药 " + (-record.rdd) + " 天";
+  if (record.rdd === 0) return "预计今天用完";
+  const prefix = record.type === "urgent" ? "紧急 · " : record.type === "soon" ? "近期 · " : "";
+  return prefix + "预计剩余 " + record.rdd + " 天";
+}
+
+function row(record, inDirectory = false) {
+  const name = esc(record.pt || "未命名");
+  const last = record.lpd ? " · " + shortDate(record.lpd) + "购药" : "";
+  const info = [record.hcp, record.dep].filter(Boolean).map(esc);
+  info.push("累计购药 " + record.cumulative + " 天");
+  return `<div class="patientRow">
+    <span class="row-mark ${record.type}" aria-hidden="true"></span>
+    <button type="button" class="patientMain" data-detail="${record.id}">
+      <span class="patientName">${name}</span>
+      <span class="patientMeta ${record.type}">${patientStatus(record)}${last}</span>
+      ${inDirectory ? '<span class="patientMeta">' + info.join(" · ") + "</span>" : ""}
+    </button>
+    <button type="button" class="row-action secondary" data-purchase="${record.id}" aria-label="更新${name}的购药记录">更新购药</button>
+  </div>`;
+}
+
+function renderDueSchedule(priority, currentDate) {
+  const groups = new Map();
+  for (const record of priority) {
+    if (record.rdd === null) continue;
+    const date = addDays(record.lpd, record.lpq);
+    const group = groups.get(date) || { count: 0, urgent: false };
+    group.count++;
+    group.urgent ||= record.type === "urgent";
+    groups.set(date, group);
+  }
+  if (!groups.size) {
+    $("dueSchedule").innerHTML = '<p class="docket-note">暂无待跟进的预计用完日期。</p>';
+    return;
+  }
+  const dates = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const shown = dates.slice(0, 4);
+  const days = shown.map(([date, group]) => {
+    const status = date < currentDate ? "已逾期" : date === currentDate ? "今日" : "";
+    return `<li${group.urgent ? ' class="urgent"' : ""}>
+      <time datetime="${date}">${shortDate(date)}</time><span class="docket-mark" aria-hidden="true"></span>
+      <span class="docket-count">${status ? status + " · " : ""}${group.count} 位</span>
+    </li>`;
+  }).join("");
+  const additional = dates.length - shown.length;
+  $("dueSchedule").innerHTML = `<ol style="--date-count:${shown.length}">${days}</ol>` +
+    (additional ? `<p class="docket-note">另有 ${additional} 个日期。可在患者列表查看完整档案。</p>` : "");
+}
+
+function renderPriority(priority = all().filter(record => record.type === "urgent" || record.type === "soon")) {
+  const visible = urgentOnly ? priority.filter(record => record.type === "urgent") : priority;
+  $("goUrgent").setAttribute("aria-pressed", String(urgentOnly));
+  $("goUrgent").textContent = urgentOnly ? "显示全部" : "只看紧急";
+  const more = visible.length > 5
+    ? '<p class="note">此处显示优先级最高的 5 位，可在患者列表查看其他档案。</p>'
+    : "";
+  $("priorityList").innerHTML = visible.length
+    ? visible.slice(0, 5).map(record => row(record)).join("") + more
+    : '<p class="emptyState">' + (urgentOnly ? "暂无紧急跟进。" : "暂无待跟进档案。录入购药天数后会自动计算提醒。") + "</p>";
+}
+
+function render() {
+  const patients = all();
+  const counts = { urgent: 0, soon: 0, normal: 0, inactive: 0, empty: 0 };
+  for (const record of patients) counts[record.type]++;
+  const priority = patients.filter(record => record.type === "urgent" || record.type === "soon");
+  $("today").textContent = new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" });
+  $("focusNum").textContent = priority.length;
+  $("urgentNum").textContent = counts.urgent;
+  renderDueSchedule(priority, today());
+  const statuses = [["urgent", "紧急"], ["soon", "近期"], ["normal", "正常"], ["inactive", "暂不跟进"]];
+  if (counts.empty) statuses.push(["empty", "未计算"]);
+  $("metrics").innerHTML = statuses.map(([type, label]) => `<span class="${type}">${label} <strong>${counts[type]}</strong></span>`).join("");
+  renderPriority(priority);
+  const recent = patients.flatMap(record => record.purchases.map(purchase => ({ ...purchase, name: record.pt, id: record.id })))
+    .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
+  $("recentList").innerHTML = recent.map(purchase => `<div class="purchase-recent">
+    <button type="button" class="patientMain" data-detail="${purchase.id}"><span class="patientName">${esc(purchase.name)}</span></button>
+    <time class="recentDate" datetime="${purchase.date}">${shortDate(purchase.date)}</time><span>${purchase.qty} 天</span>
+  </div>`).join("") || '<p class="emptyState">还没有购药记录。</p>';
+  renderPatients();
+  $("statsList").innerHTML = [
+    ["患者档案总数", patients.length],
+    ["累计购药天数", patients.reduce((sum, record) => sum + record.cumulative, 0) + " 天"],
+    ["购药记录总数", patients.reduce((sum, record) => sum + record.purchases.length, 0)],
+    ...statuses.map(([type, label]) => [label, counts[type]]),
+  ].map(([label, value]) => `<div class="kpi"><span>${label}</span><b>${value}</b></div>`).join("");
+}
+
+function renderPatients() {
+  const query = $("query").value.trim().toLowerCase();
+  const filter = $("filter").value;
+  const matches = all().filter(record =>
+    (!query || [record.pt, record.hcp, record.dep].join(" ").toLowerCase().includes(query)) &&
+    (filter === "all" || record.type === filter));
+  const empty = records.length ? "没有符合筛选条件的档案。" : "还没有患者档案。点击「新增患者」建立第一条记录。";
+  $("patientList").innerHTML = matches.map(record => row(record, true)).join("") || '<p class="emptyState">' + empty + "</p>";
+}
+
+function tab(section) {
+  document.querySelectorAll(".nav button").forEach(button => {
+    const active = button.dataset.tab === section;
+    button.classList.toggle("active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
+  for (const id of ["home", "patients", "stats", "detail"]) $(id).classList.toggle("active", id === section);
+  $("fab").classList.toggle("hidden", section !== "patients");
+}
+
+function showDetail(id){currentId=id;const record=records.find(x=>x.id===id);if(!record)return;const r=derive(record);let history=[...r.purchases].sort((a,b)=>b.date.localeCompare(a.date));$("detailContent").innerHTML=`<div class="detailHead"><div class="detailAvatar">${esc((r.pt||"档").slice(-1))}</div><div style="flex:1"><div class="detailName">${esc(r.pt)}</div><div class="muted">${esc(r.hcp||"—")} · ${esc(r.dep||"—")}</div></div>${badge(r.type)}</div><div class="recordActions" style="margin:13px 0"><button data-purchase="${id}">更新购药</button><button class="secondary" data-edit="${id}">编辑档案</button></div><div class="detailGrid"><div class="detailCell"><div class="k">预计剩余天数 RDD</div><div class="v">${r.rdd === null ? "—" : r.rdd + " 天"}</div></div><div class="detailCell"><div class="k">已记录累计购药天数</div><div class="v">${r.cumulative} 天</div></div><div class="detailCell"><div class="k">最近购药日期 LPD</div><div class="v" style="font-size:15px">${fmt(r.lpd)}</div></div><div class="detailCell"><div class="k">最近购药数量 LPQ</div><div class="v">${r.lpq === "" ? "—" : r.lpq + " 天"}</div></div></div><div class="panel"><div class="panelHead"><div class="panelTitle">档案信息</div></div><div class="kpi"><span>开始日期 STD</span><b>${fmt(r.std)}</b></div><div class="kpi"><span>疗程周数 DOT(w)</span><b>${r.dot||"—"}</b></div><div class="kpi"><span>提醒状态</span><b>${esc(r.alert||"未计算")}</b></div><div class="kpi"><span>备注</span><b>${esc(r.memo||"—")}</b></div></div><div class="panel"><div class="panelHead"><div class="panelTitle">购药历史</div><span class="muted">${history.length} 次记录</span></div>${history.length?`<div class="timeline">${history.map(p=>`<div class="event"><div class="eventDate">${fmt(p.date)}</div><div class="eventText">购药 ${p.qty} 天</div></div>`).join("")}</div>`:'<div class="emptyState">尚无购药记录，可点击「更新购药」添加首次记录</div>'}<p class="note">已记录累计购药天数 = 从开始使用本系统后，逐次记录的所有购药 LPQ 之和。该指标不等同于实际服药天数或依从性。</p></div>`;tab("detail")}
 function openPatient(r=null){$("patientForm").reset();$("pid").value=r?.id||"";$("modalTitle").textContent=r?"编辑患者档案":"新增患者档案";$("deletePatient").classList.toggle("hidden",!r);["hcp","dep","pt","std","nfc","memo"].forEach(k=>$(k).value=r?.[k]??"");$("lpd").value=r?derive(r).lpd:"";$("modal").classList.remove("hidden")}
 function editPatient(id){let r=records.find(x=>x.id===id);if(r)openPatient(r)}
 function openPurchase(id){const record=records.find(x=>x.id===id);if(!record)return;const r=derive(record);currentId=id;$("purchasePatient").textContent=`${r.pt} · 当前已记录购药 ${r.cumulative} 天`;$("purchaseDate").value=today();$("purchaseQty").value="";$("purchaseModal").classList.remove("hidden")}
@@ -97,9 +214,8 @@ $("newPatient").onclick = $("fab").onclick = $("heroAdd").onclick = () => {
 };
 $("backPatients").onclick = () => tab("patients");
 $("goUrgent").onclick = () => {
-  tab("patients");
-  $("filter").value = "urgent";
-  renderPatients();
+  urgentOnly = !urgentOnly;
+  renderPriority();
 };
 $("query").oninput = $("filter").onchange = renderPatients;
 document.querySelectorAll(".nav button").forEach(button => {
@@ -230,9 +346,11 @@ $("settings").onclick = () => {
   if (writing || changingVault || !confirm("锁定应用？请确认已记住密码。")) return;
   password = currentId = null;
   records = [];
+  urgentOnly = false;
   for (const id of ["modal", "purchaseModal", "fab", "app"]) $(id).classList.add("hidden");
-  for (const id of ["patientList", "priorityList", "recentList", "detailContent", "purchasePatient", "statsList", "metrics", "toast"]) $(id).textContent = "";
+  for (const id of ["patientList", "priorityList", "recentList", "detailContent", "purchasePatient", "statsList", "metrics", "dueSchedule", "toast"]) $(id).textContent = "";
   $("focusNum").textContent = "0";
+  $("urgentNum").textContent = "0";
   $("toast").classList.add("hidden");
   $("patientForm").reset();
   $("purchaseForm").reset();
