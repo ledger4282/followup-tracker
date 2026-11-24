@@ -132,7 +132,21 @@ function tab(section) {
 }
 
 function showDetail(id){currentId=id;const record=records.find(x=>x.id===id);if(!record)return;const r=derive(record);let history=[...r.purchases].sort((a,b)=>b.date.localeCompare(a.date));$("detailContent").innerHTML=`<div class="detailHead"><div class="detailAvatar">${esc((r.pt||"档").slice(-1))}</div><div style="flex:1"><div class="detailName">${esc(r.pt)}</div><div class="muted">${esc(r.hcp||"—")} · ${esc(r.dep||"—")}</div></div>${badge(r.type)}</div><div class="recordActions" style="margin:13px 0"><button data-purchase="${id}">更新购药</button><button class="secondary" data-edit="${id}">编辑档案</button></div><div class="detailGrid"><div class="detailCell"><div class="k">预计剩余天数 RDD</div><div class="v">${r.rdd === null ? "—" : r.rdd + " 天"}</div></div><div class="detailCell"><div class="k">已记录累计购药天数</div><div class="v">${r.cumulative} 天</div></div><div class="detailCell"><div class="k">最近购药日期 LPD</div><div class="v" style="font-size:15px">${fmt(r.lpd)}</div></div><div class="detailCell"><div class="k">最近购药数量 LPQ</div><div class="v">${r.lpq === "" ? "—" : r.lpq + " 天"}</div></div></div><div class="panel"><div class="panelHead"><div class="panelTitle">档案信息</div></div><div class="kpi"><span>开始日期 STD</span><b>${fmt(r.std)}</b></div><div class="kpi"><span>疗程周数 DOT(w)</span><b>${r.dot||"—"}</b></div><div class="kpi"><span>提醒状态</span><b>${esc(r.alert||"未计算")}</b></div><div class="kpi"><span>备注</span><b>${esc(r.memo||"—")}</b></div></div><div class="panel"><div class="panelHead"><div class="panelTitle">购药历史</div><span class="muted">${history.length} 次记录</span></div>${history.length?`<div class="timeline">${history.map(p=>`<div class="event"><div class="eventDate">${fmt(p.date)}</div><div class="eventText">购药 ${p.qty} 天</div></div>`).join("")}</div>`:'<div class="emptyState">尚无购药记录，可点击「更新购药」添加首次记录</div>'}<p class="note">已记录累计购药天数 = 从开始使用本系统后，逐次记录的所有购药 LPQ 之和。该指标不等同于实际服药天数或依从性。</p></div>`;tab("detail")}
-function openPatient(r=null){$("patientForm").reset();$("pid").value=r?.id||"";$("modalTitle").textContent=r?"编辑患者档案":"新增患者档案";$("deletePatient").classList.toggle("hidden",!r);["hcp","dep","pt","std","nfc","memo"].forEach(k=>$(k).value=r?.[k]??"");$("lpd").value=r?derive(r).lpd:"";$("modal").classList.remove("hidden")}
+function openPatient(record = null) {
+  $("patientForm").reset();
+  $("pid").value = record?.id || "";
+  $("modalTitle").textContent = record ? "编辑患者档案" : "新增患者档案";
+  $("deletePatient").classList.toggle("hidden", !record);
+  $("initialPurchaseFields").hidden = Boolean(record);
+  $("lpq").disabled = Boolean(record);
+  $("lpq").value = "";
+  $("lpdNote").textContent = record
+    ? "购药天数请通过「更新购药」记录。"
+    : "填日期和天数，保存时会同时建立首笔购药记录。也可只填日期，之后再补录天数。";
+  for (const field of ["hcp", "dep", "pt", "std", "nfc", "memo"]) $(field).value = record?.[field] ?? "";
+  $("lpd").value = record ? derive(record).lpd : "";
+  $("modal").classList.remove("hidden");
+}
 function editPatient(id){let r=records.find(x=>x.id===id);if(r)openPatient(r)}
 function openPurchase(id){const record=records.find(x=>x.id===id);if(!record)return;const r=derive(record);currentId=id;$("purchasePatient").textContent=`${r.pt} · 当前已记录购药 ${r.cumulative} 天`;$("purchaseDate").value=today();$("purchaseQty").value="";$("purchaseModal").classList.remove("hidden")}
 
@@ -164,19 +178,29 @@ async function commit(next, button, afterSave) {
 
 $("patientForm").onsubmit = event => {
   event.preventDefault();
-  const id = Number($("pid").value) || Date.now();
-  const old = records.find(record => record.id === id);
+  const existingId = Number($("pid").value);
+  const old = existingId ? records.find(record => record.id === existingId) : null;
+  if (existingId && !old) return toast("找不到要编辑的患者档案");
+  let id = old ? existingId : Date.now();
+  while (!old && records.some(record => record.id === id)) id++;
   const record = { ...old, id, purchases: old ? old.purchases : [] };
   for (const field of ["hcp", "dep", "pt", "std", "lpd", "nfc", "memo"]) record[field] = $(field).value;
   if (record.lpd && !validDate(record.lpd)) return toast("请填写有效的最近购药日期");
   record.pt = record.pt.trim();
   if (!record.pt) return toast("请填写患者档案名称或代号");
+  const initialQty = old ? "" : $("lpq").value;
+  if (initialQty !== "") {
+    const qty = Number(initialQty);
+    if (!record.lpd) return toast("填写购药天数时，请同时填写最近购药日期");
+    if (!validQty(qty)) return toast("购药天数须为有效的正整数");
+    record.purchases.push({ date: record.lpd, qty });
+  }
   const next = old ? records.map(item => item.id === id ? record : item) : [...records, record];
   commit(next, $("patientForm").querySelector('[type="submit"]'), () => {
     $("modal").classList.add("hidden");
     render();
     if (old) showDetail(id);
-    toast("档案已保存");
+    toast(initialQty !== "" ? "档案和首笔购药记录已保存" : "档案已保存");
   });
 };
 

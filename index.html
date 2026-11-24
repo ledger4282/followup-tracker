@@ -213,11 +213,12 @@
       <form id="patientForm">
         <input id="pid" type="hidden">
         <label for="pt">患者档案名称 / 代号（PT）</label><input id="pt" class="field" required>
+        <label for="std">开始日期（STD）</label><input id="std" type="date" class="field">
         <div class="grid2">
-          <div><label for="std">开始日期（STD）</label><input id="std" type="date" class="field"></div>
           <div><label for="lpd">最近购药日期（LPD）</label><input id="lpd" type="date" class="field" aria-describedby="lpdNote"></div>
+          <div id="initialPurchaseFields"><label for="lpq">最近购药数量（LPQ，天）</label><input id="lpq" type="number" min="1" max="365250" step="1" inputmode="numeric" class="field" aria-describedby="lpdNote"></div>
         </div>
-        <p class="note" id="lpdNote">可只填日期。需要计算剩余天数和提醒时，请在「更新购药」中录入该日期对应的购药天数。</p>
+        <p class="note" id="lpdNote">填日期和天数，保存时会同时建立首笔购药记录。也可只填日期，之后再补录天数。</p>
         <div class="grid2">
           <div><label for="hcp">HCP</label><input id="hcp" class="field"></div>
           <div><label for="dep">科室（DEP）</label><input id="dep" class="field"></div>
@@ -242,6 +243,6 @@
   </div>
   <input id="restoreFile" class="hidden" type="file" accept=".json,application/json">
   <div id="toast" class="toast hidden" role="status"></div>
-  <script defer src="tracker.js?v=3"></script>
+  <script defer src="tracker.js?v=4"></script>
 </body>
 </html>
